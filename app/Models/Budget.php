@@ -14,11 +14,13 @@ class Budget extends Model
         return ['amount' => 'decimal:2', 'month' => 'integer', 'year' => 'integer'];
     }
 
+    /** @return BelongsTo<User, $this> */
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
     }
 
+    /** @return BelongsTo<Category, $this> */
     public function category(): BelongsTo
     {
         return $this->belongsTo(Category::class);

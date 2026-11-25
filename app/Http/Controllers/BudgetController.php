@@ -26,13 +26,14 @@ class BudgetController extends Controller
         $budgets = $user->budgets()->with('category:id,name')
             ->where('year', $start->year)->where('month', $start->month)
             ->orderBy('id')->get()->map(function ($budget) use ($spent) {
+                $limit = (string) $budget->amount;
                 $used = BigDecimal::of((string) ($spent[$budget->category_id] ?? 0))->toScale(2);
 
                 return [
                     ...$budget->toArray(),
                     'spent' => (string) $used,
-                    'remaining' => (string) BigDecimal::of($budget->amount)->minus($used),
-                    'percentage' => (float) (string) $used->multipliedBy(100)->dividedBy($budget->amount, 1, RoundingMode::HalfUp),
+                    'remaining' => (string) BigDecimal::of($limit)->minus($used),
+                    'percentage' => (float) (string) $used->multipliedBy(100)->dividedBy($limit, 1, RoundingMode::HalfUp),
                 ];
             });
 
@@ -67,6 +68,7 @@ class BudgetController extends Controller
         return to_route('budgets.index', ['period' => $period]);
     }
 
+    /** @return array<string, mixed> */
     private function validated(Request $request, ?int $budget = null): array
     {
         $period = $request->validate([

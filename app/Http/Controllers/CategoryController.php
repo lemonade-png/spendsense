@@ -62,6 +62,7 @@ class CategoryController extends Controller
         return $category->transactions()->exists() || $category->budgets()->exists();
     }
 
+    /** @return array<string, mixed> */
     private function validated(Request $request, ?Category $category = null): array
     {
         $type = $request->validate(['type' => ['required', Rule::in(['income', 'expense'])]])['type'];

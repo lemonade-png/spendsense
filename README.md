@@ -8,7 +8,7 @@ Windows users can follow the [Windows setup guide](README-WINDOWS.md).
 
 ## Set up on Arch Linux
 
-Install the native packages from your terminal. Laravel 13 requires PHP 8.3 or newer.
+Install the native packages from your terminal. The locked dependencies require PHP 8.4.1 or newer. The project is tested with PHP 8.5.
 
 ```bash
 sudo pacman -Syu --needed php php-sqlite composer nodejs npm mariadb

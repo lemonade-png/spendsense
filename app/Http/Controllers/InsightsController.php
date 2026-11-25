@@ -6,6 +6,7 @@ use App\Models\User;
 use Brick\Math\BigDecimal;
 use Carbon\CarbonInterface;
 use Illuminate\Http\Request;
+use Illuminate\Support\Collection;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -39,6 +40,7 @@ class InsightsController extends Controller
         ]);
     }
 
+    /** @return array{income: string, expenses: string, balance: string, count: int} */
     private function totals(User $user, ?CarbonInterface $month = null): array
     {
         $query = $user->transactions();
@@ -47,8 +49,8 @@ class InsightsController extends Controller
         }
 
         $totals = $query->selectRaw('type, ROUND(SUM(amount), 2) AS total, COUNT(*) AS entries')->groupBy('type')->get()->keyBy('type');
-        $income = $this->decimal($totals->get('income')?->total ?? 0);
-        $expense = $this->decimal($totals->get('expense')?->total ?? 0);
+        $income = $this->decimal($totals->get('income')->total ?? 0);
+        $expense = $this->decimal($totals->get('expense')->total ?? 0);
 
         return [
             'income' => (string) $income,
@@ -58,6 +60,7 @@ class InsightsController extends Controller
         ];
     }
 
+    /** @return array{history: list<array{period: string, income: float, expenses: float}>, breakdown: Collection<int, array{name: string, amount: float}>} */
     private function charts(User $user, CarbonInterface $month): array
     {
         $start = $month->copy()->subMonths(5);
@@ -72,8 +75,8 @@ class InsightsController extends Controller
             $totals = $rows->get($date->format('Y-m'))?->keyBy('type');
             $history[] = [
                 'period' => $date->format('M Y'),
-                'income' => (float) ($totals?->get('income')?->total ?? 0),
-                'expenses' => (float) ($totals?->get('expense')?->total ?? 0),
+                'income' => (float) ($totals?->get('income')->total ?? 0),
+                'expenses' => (float) ($totals?->get('expense')->total ?? 0),
             ];
         }
 

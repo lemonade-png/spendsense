@@ -2,7 +2,9 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Category;
 use App\Models\User;
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
@@ -74,11 +76,13 @@ class TransactionController extends Controller
         return to_route('transactions.index');
     }
 
-    private function categories(User $user): array
+    /** @return Collection<int, Category> */
+    private function categories(User $user): Collection
     {
-        return $user->categories()->orderBy('name')->get(['id', 'name', 'type'])->toArray();
+        return $user->categories()->orderBy('name')->get(['id', 'name', 'type']);
     }
 
+    /** @return array<string, mixed> */
     private function validated(Request $request): array
     {
         $type = $request->validate(['type' => ['required', Rule::in(['income', 'expense'])]])['type'];

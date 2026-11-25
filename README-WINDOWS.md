@@ -5,7 +5,7 @@ Use native PHP, Node.js, and MariaDB on Windows. Laravel serves the application 
 ## 1. Install the prerequisites
 
 - Install [Git for Windows](https://gitforwindows.org/).
-- Install [PHP for Windows](https://windows.php.net/download/) **8.3 or newer**. PHP 8.5 is the version verified on the development machine. Add the PHP folder to your user PATH.
+- Install [PHP for Windows](https://windows.php.net/download/) **8.4.1 or newer**. PHP 8.5 is the version verified on the development machine. Add the PHP folder to your user PATH.
 - Install [Composer](https://getcomposer.org/download/) using its Windows installer. Point it at the same PHP executable.
 - Install [Node.js 24 LTS](https://nodejs.org/en/download), **version 24.11 or newer**, which includes npm.
 - Install [MariaDB](https://mariadb.com/downloads/) with its Windows MSI installer. Configure it as a Windows service on port 3306 and set an administrator password.
