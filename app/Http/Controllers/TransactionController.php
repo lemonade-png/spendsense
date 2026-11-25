@@ -2,8 +2,9 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\Transaction;
-use App\Services\FinancialCalculator;
+use App\Models\Category;
+use App\Models\User;
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
@@ -14,84 +15,86 @@ class TransactionController extends Controller
 {
     public function index(Request $request): Response
     {
+        $filters = $request->validate([
+            'search' => ['nullable', 'string', 'max:150'],
+            'type' => ['nullable', Rule::in(['income', 'expense'])],
+            'category' => ['nullable', 'integer', 'min:1'],
+        ]);
         $user = $request->user();
-        $user->seedDefaultCategories();
-        $query = $user->transactions()->with('category');
 
-        if ($request->filled('search')) {
-            $search = $request->string('search')->toString();
-            $query->where(function ($q) use ($search) {
-                $q->where('title', 'like', "%{$search}%")
-                  ->orWhere('notes', 'like', "%{$search}%")
-                  ->orWhere('payment_method', 'like', "%{$search}%");
-            });
-        }
-        if ($request->filled('type') && in_array($request->type, ['income', 'expense'], true)) {
-            $query->where('type', $request->type);
-        }
-        if ($request->filled('category_id')) {
-            $query->where('category_id', $request->integer('category_id'));
-        }
-        if ($request->filled('date_from')) {
-            $query->whereDate('transaction_date', '>=', $request->date_from);
-        }
-        if ($request->filled('date_to')) {
-            $query->whereDate('transaction_date', '<=', $request->date_to);
-        }
+        $transactions = $user->transactions()->with('category:id,name')
+            ->when(isset($filters['search']), function ($query) use ($filters) {
+                $query->where('title', 'like', '%'.$filters['search'].'%');
+            })
+            ->when($filters['type'] ?? null, fn ($query, $type) => $query->where('type', $type))
+            ->when($filters['category'] ?? null, fn ($query, $id) => $query->where('category_id', $id))
+            ->orderByDesc('transaction_date')->orderByDesc('id')->paginate(15)->withQueryString();
 
-        $filteredIncome = (string) ((clone $query)->where('type', 'income')->sum('amount') ?? '0.00');
-        $filteredExpenses = (string) ((clone $query)->where('type', 'expense')->sum('amount') ?? '0.00');
-
-        $transactions = $query->orderByDesc('transaction_date')->orderByDesc('id')->paginate(15)->withQueryString();
-
-        return Inertia::render('Transactions/Index', [
+        return Inertia::render('transactions/index', [
             'transactions' => $transactions,
-            'categories' => $user->categories()->orderBy('name')->get(),
-            'filters' => $request->only(['search', 'type', 'category_id', 'date_from', 'date_to']),
-            'totals' => [
-                'income' => FinancialCalculator::normalize($filteredIncome),
-                'expenses' => FinancialCalculator::normalize($filteredExpenses),
-                'net' => FinancialCalculator::subtract($filteredIncome, $filteredExpenses),
-            ],
+            'filters' => $filters,
+            'categories' => $this->categories($user),
+        ]);
+    }
+
+    public function create(Request $request): Response
+    {
+        return Inertia::render('transactions/form', [
+            'categories' => $this->categories($request->user()),
+            'today' => today()->toDateString(),
         ]);
     }
 
     public function store(Request $request): RedirectResponse
     {
-        $user = $request->user();
-        $validated = $request->validate([
-            'title' => ['required', 'string', 'max:150'],
-            'type' => ['required', Rule::in(['income', 'expense'])],
-            'amount' => ['required', 'numeric', 'gt:0', 'max:999999999999.99'],
-            'category_id' => ['required', Rule::exists('categories', 'id')->where(fn ($q) => $q->where('user_id', $user->id))],
-            'transaction_date' => ['required', 'date'],
-            'payment_method' => ['required', 'string', 'max:50'],
-            'notes' => ['nullable', 'string', 'max:1000'],
-        ]);
-        $user->transactions()->create($validated);
-        return back()->with('success', 'Transaction saved.');
+        $request->user()->transactions()->create($this->validated($request));
+
+        return to_route('transactions.index');
     }
 
-    public function update(Request $request, Transaction $transaction): RedirectResponse
+    public function edit(Request $request, string $transaction): Response
     {
-        abort_unless($transaction->user_id === $request->user()->id, 403);
-        $validated = $request->validate([
-            'title' => ['required', 'string', 'max:150'],
-            'type' => ['required', Rule::in(['income', 'expense'])],
-            'amount' => ['required', 'numeric', 'gt:0', 'max:999999999999.99'],
-            'category_id' => ['required', Rule::exists('categories', 'id')->where(fn ($q) => $q->where('user_id', $request->user()->id))],
-            'transaction_date' => ['required', 'date'],
-            'payment_method' => ['required', 'string', 'max:50'],
-            'notes' => ['nullable', 'string', 'max:1000'],
+        return Inertia::render('transactions/form', [
+            'transaction' => $request->user()->transactions()->findOrFail($transaction),
+            'categories' => $this->categories($request->user()),
+            'today' => today()->toDateString(),
         ]);
-        $transaction->update($validated);
-        return back()->with('success', 'Transaction updated.');
     }
 
-    public function destroy(Request $request, Transaction $transaction): RedirectResponse
+    public function update(Request $request, string $transaction): RedirectResponse
     {
-        abort_unless($transaction->user_id === $request->user()->id, 403);
-        $transaction->delete();
-        return back()->with('success', 'Transaction deleted.');
+        $record = $request->user()->transactions()->findOrFail($transaction);
+        $record->update($this->validated($request));
+
+        return to_route('transactions.index');
+    }
+
+    public function destroy(Request $request, string $transaction): RedirectResponse
+    {
+        $request->user()->transactions()->findOrFail($transaction)->delete();
+
+        return to_route('transactions.index');
+    }
+
+    /** @return Collection<int, Category> */
+    private function categories(User $user): Collection
+    {
+        return $user->categories()->orderBy('name')->get(['id', 'name', 'type']);
+    }
+
+    /** @return array<string, mixed> */
+    private function validated(Request $request): array
+    {
+        $type = $request->validate(['type' => ['required', Rule::in(['income', 'expense'])]])['type'];
+
+        return $request->validate([
+            'title' => ['required', 'string', 'max:150'],
+            'amount' => ['required', 'numeric', 'decimal:0,2', 'min:0.01', 'max:9999999999.99'],
+            'type' => ['required', Rule::in(['income', 'expense'])],
+            'category_id' => ['required', 'integer', Rule::exists('categories', 'id')
+                ->where('user_id', $request->user()->id)->where('type', $type)],
+            'transaction_date' => ['required', 'date_format:Y-m-d'],
+            'notes' => ['nullable', 'string', 'max:2000'],
+        ]);
     }
 }
